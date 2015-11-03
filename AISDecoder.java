@@ -36,6 +36,8 @@ public class AISDecoder {
 
     	String payload = fields[5];
 
+    	int padBits = Integer.parseInt(fields[6]);
+
     	String checksum = sentance.split("\\*")[1];
 
     	int sentanceSum = 0;
@@ -83,6 +85,7 @@ public class AISDecoder {
     					}
     				}
     			}
+    
     			operateOnAISPayload(payload);
     			return;
     		}
@@ -95,7 +98,15 @@ public class AISDecoder {
 
     }
 
+    // It might make sense to get rid of this method, and have a method that converts only needed information into fields,
+    // while it would be more complex, it wouldn't be harder for the computer to do at all, and should work more nicely.
     public static void operateOnAISPayload(String payload) {
+    	if (payload.charAt(0) != '1' && payload.charAt(0) != '2' && payload.charAt(0) != '3') {
+    		return;
+    	}
+    	int [] decodedBinary = getBits(payload);
+    	int messageType = decodedBinary[0] >> 2;
+    	System.out.println("Message type: " + messageType);
     	return;
     }
     
