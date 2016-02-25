@@ -1,13 +1,18 @@
 import java.util.*;
 import java.io.*;
+import java.math.*;
 public class AISDecoder {
 	// Need a place to hold fragments of incomplete sentances
 	public static ArrayList<String> fragments = new ArrayList<String>();
+	public static ArrayList<DataPoint> dataPoints = new ArrayList<DataPoint>();
 	// Takes an argument of a filename, crefates buffered reader 
 	public static void main(String[] args) {
+		//Holds information on all of the points to be written to KML
+		
+
 		// Using try to handle I/O exceptions
 		// dataBR reads from file given as an argument to program
-		try (BufferedReader dataBR = new BufferedReader(new FileReader(args[0]))) {
+		try (BufferedReader dataBR = new BufferedReader(new FileReader("\\\\wwhs2\\users\\students\\11\\Bown.Logan.s231806\\AIS-to-KML-master\\AIS-to-KML-master\\nmea-single-string.txt"))) {
 			// Initialize string that will read lines from bufferedreader
 			String NMEASentance;
 			// Loop through the file
@@ -17,6 +22,9 @@ public class AISDecoder {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		System.out.println(dataPoints.size());
+		writeToKML(dataPoints);
+
 	}
 
 	public static void processNMEASentance(String sentance){
@@ -87,7 +95,7 @@ public class AISDecoder {
 					}
 				}
 	
-				operateOnAISPayload(payload);
+				// operateOnAISPayload(payload);
 				return;
 			}
 		}
@@ -96,11 +104,9 @@ public class AISDecoder {
 			operateOnAISPayload(payload);
 			return;
 		}
-
 	}
 
-	// It might make sense to get rid of this method, and have a method that converts only needed information into fields,
-	// while it would be more complex, it wouldn't be harder for the computer to do at all, and should work more nicely.
+
 	public static void operateOnAISPayload(String payload) {
 
 		String [] navigationStatuses = {"Under way using engine","At anchor","Not under command","Restricted manoeuverability","Constrained by her draught","Moored","Aground","Engaged in Fishing","Under way sailing","Reserved for future amendment of Navigational Status for HSC","Reserved for future amendment of Navigational Status for WIG","Reserved for future use","Reserved for future use","Reserved for future use","AIS-SART is active","Not defined"};
@@ -146,7 +152,14 @@ public class AISDecoder {
 			System.out.println("Position accuracy: Not accurate to under 10 meters");
 
 
-		System.out.println("-----------------------");
+		double longitude = getBits(61, 88, payload) / 600000.0;
+		
+		double latitude = getBits(89, 115, payload) & 0b111111111111111111111111111;
+		
+		System.out.println(latitude/600000.0 + ", " + longitude);
+		
+		dataPoints.add(new DataPoint(mmsi, latitude, longitude));
+
 		return;
 	}
 	
@@ -163,11 +176,45 @@ public class AISDecoder {
 			concatenated |= get6Bits(i, encodedData) << (((endByte - i)*6) - rightPad); //gets bytes needed and orders them
 		}
 		concatenated |= ((get6Bits(endByte,encodedData) >>> rightPad) & (int)(Math.pow(2,6-rightPad)-1));
-		// concatenated = concatenated & (long)(Math.pow(2,endBit-startBit)-1);
 		return concatenated;
+	}
+
+	public static void writeToKML(ArrayList<DataPoint> points) {
+		File output = new File("\\\\wwhs2\\users\\students\\11\\Bown.Logan.s231806\\AIS-to-KML-master\\AIS-to-KML-master\\AisReports.kml");
+		try {
+			output.createNewFile();
+			output.setWritable(true);
+			PrintWriter pw = new PrintWriter(output);
+			pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+			pw.println("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\" xmlns:kml=\"http://www.opengis.net/kml/2.2\" xmlns:atom=\"http://www.w3.org/2005/Atom\">");
+			pw.println("<Document>");
+			pw.println("\t<name>AisReports.kml</name>");
+			for (DataPoint dp : points) {
+				pw.println("\t<Placemark>");
+				pw.println("\t\t<name>" + dp.mmsi + "</name>");
+				pw.println("\t\t<Point>");
+				pw.println("\t\t\t<Coordinates>"+dp.latitude+","+dp.longitude+",0</Coordinates>");
+				pw.println("\t\t</Point>");
+				pw.println("\t</Placemark>");
+			}
+			pw.println("</Document>");
+			pw.println("</kml>");
+			pw.close();
+		} catch (IOException e) {System.out.println("Error occurred.");}
+		
 	}
 }
 
+class DataPoint {
+	public long mmsi;
+	public double latitude;
+	public double longitude;
+	public DataPoint(long mmsi, double latitude, double longitude) {
+		this.mmsi = mmsi;
+		this.latitude = latitude;
+		this.longitude = longitude;
+	}
+}
 /*
 
 */
