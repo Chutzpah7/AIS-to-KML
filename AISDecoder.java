@@ -145,6 +145,7 @@ public class AISDecoder {
 		else
 			System.out.println("Position accuracy: Not accurate to under 10 meters");
 
+		
 
 		System.out.println("-----------------------");
 		return;
