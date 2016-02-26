@@ -204,10 +204,11 @@ public class AISDecoder {
 		
 		double latitude = (getBits(89, 89, payload) == 0) ? getBits(90, 115, payload) / 600000.0 : -1 * (((getBits(90, 115, payload)) ^ 0x1ffffff) - 1) / 600000.0; //pulls sign bit from latitude value
 
-		//double latitude = (double)(latitudeSign * (((getBits(90, 115, payload) & 0x1ffffff) ^ 0x1ffffff) - 1)) / 600000.0; //2s compliment of unsigned part of latitude multiplied by sign bit
+		double courseOverGround = getBits(116, 127, payload) / 10.0;
 
-		dataPoints.add(new DataPoint(mmsi, String.format("%.6f",latitude), String.format("%.6f",longitude), navStatusString, rateOfTurnString, speedOverGround, positionAccuracy));
 
+
+		dataPoints.add(new DataPoint(mmsi, String.format("%.13f",latitude), String.format("%.13f",longitude), navStatusString, rateOfTurnString, speedOverGround, positionAccuracy, courseOverGround));
 		return;
 	}
 	
@@ -243,8 +244,17 @@ public class AISDecoder {
 					System.out.println(dp);
 				pw.println("\t<Placemark>");
 				pw.println("\t\t<name>" + dp.mmsi + "</name>");
+				pw.println("\t\t<Style>");
+				pw.println("\t\t\t<IconStyle>");
+				pw.println("\t\t\t\t<heading>" + (int)dp.courseOverGround + "</heading>");
+				pw.println("\t\t\t\t<Icon>");
+				pw.println("\t\t\t\t\t<href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href>");
+				pw.println("\t\t\t\t</Icon>");
+				pw.println("\t\t\t</IconStyle>");
+				pw.println("\t\t</Style>");
 				pw.println("\t\t<Point>");
-				pw.println("\t\t\t<Coordinates>" + dp.latitude + "," + dp.longitude + ",0</Coordinates>");
+				pw.println("\t\t\t<gx:drawOrder>1</gx:drawOrder>");
+				pw.println("\t\t\t<coordinates>" + dp.longitude + "," + dp.latitude+ ",0</coordinates>");
 				pw.println("\t\t</Point>");
 				pw.println("\t</Placemark>");
 			}
@@ -265,8 +275,9 @@ class DataPoint {
 	public String rateOfTurn;
 	public double speedOverGround;
 	public String positionAccuracy;
+	public double courseOverGround;
 
-	public DataPoint(long mmsi, String latitude, String longitude, String navStatus, String rateOfTurn, long speedOverGround, boolean positionAccuracy) {
+	public DataPoint(long mmsi, String latitude, String longitude, String navStatus, String rateOfTurn, long speedOverGround, boolean positionAccuracy, double courseOverGround) {
 		this.mmsi = mmsi;
 		this.latitude = latitude;
 		this.longitude = longitude;
@@ -274,10 +285,11 @@ class DataPoint {
 		this.rateOfTurn = rateOfTurn;
 		this.speedOverGround = (new Long(speedOverGround)).doubleValue() / 10.0;
 		this.positionAccuracy = positionAccuracy ? "DGPS-quality fix, accuracy < 10 m" : "GNSS fix, accuracy > 10m";
+		this.courseOverGround = courseOverGround;
 	}
 
 	public String toString() {
-		return "MMSI: " + mmsi + "\nLatitude: " + latitude + ", Longitude: " + longitude + "\nNavigation Status: " + navStatus + "\nRate of Turn: " + rateOfTurn + "\nSpeed Over Ground: " + speedOverGround + " knots\nPosition Accuracy: " + positionAccuracy + "\n";
+		return "MMSI: " + mmsi + ", Longitude: " + longitude + "\nLatitude: " + latitude + "\nNavigation Status: " + navStatus + "\nRate of Turn: " + rateOfTurn + "\nSpeed Over Ground: " + speedOverGround + " knots\nCourse over Ground: " + courseOverGround + "\nPosition Accuracy: " + positionAccuracy + "\n";
 		
 	}
 }
