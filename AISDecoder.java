@@ -2,9 +2,18 @@ import java.util.*;
 import java.io.*;
 import java.math.*;
 public class AISDecoder {
+	public static final int KML = 0;
+	public static final int CSV = 1;
+
+
 	// Need a place to hold fragments of incomplete sentances
 	public static ArrayList<String> fragments = new ArrayList<String>();
 	public static ArrayList<DataPoint> dataPoints = new ArrayList<DataPoint>();
+	public static boolean silent = false;
+	public static ArrayList<String> inputFiles = new ArrayList<String>();
+	public static String outputFile = "";
+	public static int outputType = KML;
+
 	// Takes an argument of a filename, crefates buffered reader 
 	public static void main(String[] args) {
 		//Holds information on all of the points to be written to KML
@@ -12,24 +21,63 @@ public class AISDecoder {
 
 		// Using try to handle I/O exceptions
 		// dataBR reads from file given as an argument to program
-		try (BufferedReader dataBR = new BufferedReader(new FileReader("\\\\wwhs2\\users\\students\\11\\Bown.Logan.s231806\\AIS-to-KML-master\\AIS-to-KML-master\\nmea-single-string.txt"))) {
-			// Initialize string that will read lines from bufferedreader
-			String NMEASentance;
-			// Loop through the file
-			while ((NMEASentance = dataBR.readLine()) != null) {
-				processNMEASentance(NMEASentance);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (args.length == 0) {
+			System.out.println("Usage: AISDecoder [OPTION]... FILE\nOptions:\n\t-s, --silent\t\tdo not write anything to stdout\n\t-o, --output FILE\twrite output to a file\n\t-k, --kml\t\toutput as kml file (default)\n\t-c, --csv\t\toutput as csv file");
+			System.exit(1);
 		}
-		System.out.println(dataPoints.size());
-		writeToKML(dataPoints);
+
+		for (int i = 0; i < args.length; i++) {
+			if (i != 0 && (args[i-1].equalsIgnoreCase("-o") || args[i-1].equalsIgnoreCase("--output"))) {
+				outputFile = args[i];
+				break;
+			}
+		}
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].charAt(0) == '-') {
+				switch(args[i].toLowerCase()) {
+					case "-s": case "--silent":
+						silent = true;
+						break;
+					case "-c": case "--csv":
+						outputType = CSV;
+						break;
+					case "-o": case "--output":
+						break;
+					default:
+						System.err.println("");
+						System.exit(1);
+						break;
+				}
+			}
+			else if (!args[i].equalsIgnoreCase(outputFile)){
+				inputFiles.add(args[i]);
+			}
+		}
+
+		for (String fileString : inputFiles) {
+
+			try (BufferedReader dataBR = new BufferedReader(new FileReader(fileString))) {
+				// Initialize string that will read lines from bufferedreader
+				String NMEASentance;
+				// Loop through the file
+				while ((NMEASentance = dataBR.readLine()) != null) {
+					processNMEASentance(NMEASentance);
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+		}
+		if(outputType==KML)
+			writeToKML(dataPoints);
+		else if(outputType==CSV)
+			;
 
 	}
 
-	public static void processNMEASentance(String sentance){
+	public static void processNMEASentance(String sentance) {
 
-		System.out.println(sentance);
 		// Fields in an NMEA sentance are comma separated.
 		String [] fields = sentance.split("\\*")[0].split(",");
 
@@ -94,8 +142,6 @@ public class AISDecoder {
 						}
 					}
 				}
-	
-				// operateOnAISPayload(payload);
 				return;
 			}
 		}
@@ -114,52 +160,53 @@ public class AISDecoder {
 		if (payload.charAt(0) != '1' && payload.charAt(0) != '2' && payload.charAt(0) != '3') {
 			return;
 		}
-		long messageType = getBits(0, 5, payload) & 0x3f; //unsigned
-		System.out.println("Message type: " + messageType);
 
-		long mmsi = getBits(8, 37, payload) & 0x1fffffff; //unsigned
-		System.out.println("MMSI: " + mmsi);
+		long mmsi = getBits(8, 37, payload); //unsigned
 
-		int navStatus = (int)getBits(38, 41, payload) & 0xf; //unsigned
-		System.out.println("Navigation Status: " + navigationStatuses[navStatus]);
+		int navStatus = (int) getBits(38, 41, payload); //unsigned
+		String navStatusString;
+		navStatusString = navigationStatuses[navStatus];
 
-		long rateOfTurn = (byte)getBits(42, 49, payload); //signed, scaled byte
-		if (rateOfTurn == 0)
-			System.out.println("Rate of turn: 0 degrees/min - not turning");
-		else if (rateOfTurn == 127)
-			System.out.println("Rate of turn: No turn rate available - turning right");
-		else if (rateOfTurn == -127)
-			System.out.println("Rate of turn: No turn rate available - turning left");
-		else if (rateOfTurn >= 1 && rateOfTurn <= 126)
-			System.out.println("Rate of turn: " + Math.pow(rateOfTurn/4.733, 2) + " degrees/min - turning right");
-		else if (rateOfTurn <= -1 && rateOfTurn >= -126)
-			System.out.println("Rate of turn: -" + Math.pow(rateOfTurn/4.733, 2) + " degrees/min - turning left");
+		long rateOfTurn = (getBits(42, 49, payload)); //signed scaled int
+		String rateOfTurnString;
+		if (rateOfTurn == 0) {
+			rateOfTurnString = "0";
+		}
+		else if (rateOfTurn == 127){
+			rateOfTurnString = "Turning right";
+		}
+		else if (rateOfTurn == -127){
+			rateOfTurnString = "Turning left";
+		}
+		else if (rateOfTurn >= 1 && rateOfTurn <= 126) {
+			rateOfTurnString = "" + Math.pow(rateOfTurn / 4.733, 2);
+		}
+		else if (rateOfTurn <= -1 && rateOfTurn >= -126) {
+			rateOfTurnString = "-" + Math.pow(rateOfTurn / 4.733, 2);
+		}
 		else
-			System.out.println("Rate of turn: Not available");
+			rateOfTurnString = "N/A";
 
-		long speedOverGround = getBits(50, 59, payload) & 0x3ff; //unsigned, scaled int
+		long speedOverGround = getBits(50, 59, payload); //unsigned, scaled int
+		String sogString;
 		if (speedOverGround == 1023)
-			System.out.println("Speed over ground: Not available");
+			sogString = "N/A";
 		else if (speedOverGround == 1022)
-			System.out.println("Speed over ground: Over 102.2 knots");
+			sogString = "Over 102.2";
 		else
-			System.out.println("Speed over ground: " + speedOverGround/10.0 + " knots");
+			sogString = "" + speedOverGround / 10.0;
 
-		boolean positionAccuracy = (getBits(60, 60, payload)==1); //boolean
-		if (positionAccuracy)
-			System.out.println("Position accuracy: DGPS-quality, accurate to under 10 meters");
-		else
-			System.out.println("Position accuracy: Not accurate to under 10 meters");
+		boolean positionAccuracy = (getBits(60, 60, payload) == 1); // boolean
 
 		
 
-		double longitude = getBits(61, 88, payload) / 600000.0;
+		double longitude = (getBits(61, 61, payload) == 0) ? getBits(62, 88, payload) / 600000.0 : -1 * (((getBits(62, 88, payload)) ^ 0x7ffffff) - 1) / 600000.0; //2s compliment of unsigned part of longitude multiplied by sign bit
 		
-		double latitude = getBits(89, 115, payload) & 0b111111111111111111111111111;
-		
-		System.out.println(latitude/600000.0 + ", " + longitude);
-		
-		dataPoints.add(new DataPoint(mmsi, latitude, longitude));
+		double latitude = (getBits(89, 89, payload) == 0) ? getBits(90, 115, payload) / 600000.0 : -1 * (((getBits(90, 115, payload)) ^ 0x1ffffff) - 1) / 600000.0; //pulls sign bit from latitude value
+
+		//double latitude = (double)(latitudeSign * (((getBits(90, 115, payload) & 0x1ffffff) ^ 0x1ffffff) - 1)) / 600000.0; //2s compliment of unsigned part of latitude multiplied by sign bit
+
+		dataPoints.add(new DataPoint(mmsi, String.format("%.6f",latitude), String.format("%.6f",longitude), navStatusString, rateOfTurnString, speedOverGround, positionAccuracy));
 
 		return;
 	}
@@ -170,18 +217,19 @@ public class AISDecoder {
 
 	public static long getBits(int startBit, int endBit, String encodedData) {
 		long concatenated = 0;
-		int startByte = startBit/6;
-		int endByte = endBit/6;
+		int startByte = startBit / 6;
+		int endByte = endBit / 6;
 		int rightPad = 5 - (endBit % 6);
 		for (int i = startByte; i < endByte; i++) {
-			concatenated |= get6Bits(i, encodedData) << (((endByte - i)*6) - rightPad); //gets bytes needed and orders them
+			concatenated |= get6Bits(i, encodedData) << (((endByte - i) * 6) - rightPad); //gets bytes needed and orders them
 		}
-		concatenated |= ((get6Bits(endByte,encodedData) >>> rightPad) & (int)(Math.pow(2,6-rightPad)-1));
+		concatenated |= ((get6Bits(endByte, encodedData) >> rightPad) & (int)(Math.pow(2, 6 - rightPad) - 1));
+		concatenated = concatenated & (long)(Math.pow(2, endBit - startBit + 1) - 1);
 		return concatenated;
 	}
 
 	public static void writeToKML(ArrayList<DataPoint> points) {
-		File output = new File("\\\\wwhs2\\users\\students\\11\\Bown.Logan.s231806\\AIS-to-KML-master\\AIS-to-KML-master\\AisReports.kml");
+		File output = new File(outputFile);
 		try {
 			output.createNewFile();
 			output.setWritable(true);
@@ -189,31 +237,48 @@ public class AISDecoder {
 			pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 			pw.println("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\" xmlns:kml=\"http://www.opengis.net/kml/2.2\" xmlns:atom=\"http://www.w3.org/2005/Atom\">");
 			pw.println("<Document>");
-			pw.println("\t<name>AisReports.kml</name>");
+			pw.println("\t<name>" + outputFile + "</name>");
 			for (DataPoint dp : points) {
+				if(!silent)
+					System.out.println(dp);
 				pw.println("\t<Placemark>");
 				pw.println("\t\t<name>" + dp.mmsi + "</name>");
 				pw.println("\t\t<Point>");
-				pw.println("\t\t\t<Coordinates>"+dp.latitude+","+dp.longitude+",0</Coordinates>");
+				pw.println("\t\t\t<Coordinates>" + dp.latitude + "," + dp.longitude + ",0</Coordinates>");
 				pw.println("\t\t</Point>");
 				pw.println("\t</Placemark>");
 			}
 			pw.println("</Document>");
 			pw.println("</kml>");
 			pw.close();
-		} catch (IOException e) {System.out.println("Error occurred.");}
+		} catch (IOException e) {e.printStackTrace();}
 		
 	}
 }
 
 class DataPoint {
+
 	public long mmsi;
-	public double latitude;
-	public double longitude;
-	public DataPoint(long mmsi, double latitude, double longitude) {
+	public String latitude;
+	public String longitude;
+	public String navStatus;
+	public String rateOfTurn;
+	public double speedOverGround;
+	public String positionAccuracy;
+
+	public DataPoint(long mmsi, String latitude, String longitude, String navStatus, String rateOfTurn, long speedOverGround, boolean positionAccuracy) {
 		this.mmsi = mmsi;
 		this.latitude = latitude;
 		this.longitude = longitude;
+		this.navStatus = navStatus;
+		this.rateOfTurn = rateOfTurn;
+		this.speedOverGround = (new Long(speedOverGround)).doubleValue() / 10.0;
+		this.positionAccuracy = positionAccuracy ? "DGPS-quality fix, accuracy < 10 m" : "GNSS fix, accuracy > 10m";
+	}
+
+	public String toString() {
+		return "MMSI: " + mmsi + "\nLatitude: " + latitude + ", Longitude: " + longitude + "\nNavigation Status: " + navStatus + "\nRate of Turn: " + rateOfTurn + "\nSpeed Over Ground: " + speedOverGround + " knots\nPosition Accuracy: " + positionAccuracy + "\n";
+		
 	}
 }
 /*
